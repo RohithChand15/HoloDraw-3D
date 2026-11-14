@@ -235,3 +235,89 @@ npm run preview
    - In **Settings**, adjust the **One Euro Filter** smoothing parameters (Min Cutoff and Beta). Ensure hands are well-lit and within camera view.
 4. **GLB Export**:
    - GLB files are saved as self-contained binary models compatible with Blender, Windows 3D Viewer, and three.js viewers.
+   - ## 🛠️ Troubleshooting — npm is not recognized (Windows)
+
+If you encounter this error:
+
+```text
+'npm' is not recognized as an internal or external command,
+operable program or batch file.
+```
+
+It usually means Node.js is not installed or its installation directory is missing from the Windows PATH.
+
+### Step 1: Download Node.js
+
+Visit the official website:
+
+https://nodejs.org/
+
+Download and install the latest **LTS version**.
+
+During installation:
+- Keep the default installation settings.
+- Ensure the option to add Node.js to PATH is enabled, if available.
+- Complete the installation.
+
+### Step 2: Restart the terminal
+
+Close PowerShell, Command Prompt and VS Code terminals.
+
+Reopen VS Code or PowerShell.
+
+### Step 3: Verify Node.js and npm
+
+Run:
+
+```powershell
+node -v
+npm -v
+```
+
+Both commands should display version numbers.
+
+### Step 4: If npm is still not recognized
+
+Check whether Windows can locate Node.js:
+
+```powershell
+where.exe node
+where.exe npm
+```
+
+If the commands cannot locate the files:
+
+1. Open Windows Search.
+2. Search for **Environment Variables**.
+3. Select **Edit the system environment variables**.
+4. Click **Environment Variables**.
+5. Find the `Path` variable under User variables or System variables.
+6. Check that the Node.js installation directory is included, commonly:
+
+```text
+C:\Program Files\nodejs\
+```
+
+7. If missing, add the correct installation directory.
+8. Save the changes and restart your terminal.
+
+If Node.js is not installed correctly, reinstall the LTS version from the official website.
+
+### Step 5: Start HoloDraw 3D
+
+After npm is working, navigate to the cloned project folder and run:
+
+```bash
+npm install
+npm run dev
+```
+
+Open the local URL displayed in your terminal, usually:
+
+```text
+http://localhost:5173
+```
+
+Allow webcam access when requested.
+
+**Note:** Never download Node.js or npm installers from unofficial websites.
