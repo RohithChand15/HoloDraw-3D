@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HOLODraw 3D — Professional Holographic 2D/3D Gesture Studio</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body class="mode-2d">
+  <div id="app-container">
+    <!-- Layer 0: Camera Feed (Subtle Hologram Ghosting) -->
+    <video id="camera-video" playsinline muted></video>
+
+    <!-- Layer 1: Three.js 3D Viewport -->
+    <div id="three-canvas-container"></div>
+
+    <!-- Layer 2: 2D Drawing Canvas -->
+    <canvas id="drawing-canvas"></canvas>
+
+    <!-- Layer 3: Tracking Skeleton & Hover/Selection Overlay -->
+    <canvas id="tracking-overlay-canvas"></canvas>
+
+    <!-- Holographic Scanline Effect -->
+    <div class="hologram-scanlines"></div>
+
+    <!-- Layer 4: HUD & UI Overlay -->
+    <div id="hud-ui-root">
+      <!-- HUD Top Bar -->
+      <header class="hud-top-bar glass-panel">
+        <div class="hud-section">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+            <span style="font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; color: #ffffff;">HOLO<span style="color: #00f5ff;">DRAW</span> <span style="font-size: 0.75rem; color: #a855f7;">3D</span></span>
+          </div>
+
+          <!-- Mode Switcher -->
+          <div style="display: flex; gap: 4px; background: rgba(3, 7, 18, 0.5); padding: 3px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 245, 255, 0.2);">
+            <button id="btn-mode-2d" class="holo-button active" style="padding: 4px 10px; font-size: 0.75rem;">2D CANVAS [Tab]</button>
+            <button id="btn-mode-3d" class="holo-button" style="padding: 4px 10px; font-size: 0.75rem;">3D STUDIO [Tab]</button>
+            <button id="btn-mode-split" class="holo-button" style="padding: 4px 10px; font-size: 0.75rem;">SPLIT DUAL</button>
+          </div>
+        </div>
+
+        <!-- Center: Tracking Status, Quality & FPS Meters -->
+        <div class="hud-section">
+          <!-- Left Hand -->
+          <div id="hud-hand-left" class="hand-meter-group hand-meter lost">
+            <span class="hand-label" style="color: #a855f7;">LH</span>
+            <div class="meter-track"><div class="meter-bar"></div></div>
+            <span id="hud-gesture-left" class="gesture-chip lost">NO HAND</span>
+          </div>
+
+          <!-- Dual Gesture Badge -->
+          <div id="hud-dual-badge" class="dual-badge" style="display: none;">DUAL LINKED</div>
+
+          <!-- Right Hand -->
+          <div id="hud-hand-right" class="hand-meter-group hand-meter lost">
+            <span class="hand-label" style="color: #00f5ff;">RH</span>
+            <div class="meter-track"><div class="meter-bar"></div></div>
+            <span id="hud-gesture-right" class="gesture-chip lost">NO HAND</span>
+          </div>
+
+          <!-- Tracking Quality Badge -->
+          <span id="hud-quality" class="holo-badge quality-none" title="Tracking Quality Indicator">QUALITY: --</span>
+
+          <!-- FPS & Latency Counter -->
+          <span id="hud-fps" class="holo-badge badge-cyan" style="font-family: monospace;">-- FPS</span>
+          <span id="hud-latency" class="holo-badge badge-purple" style="font-family: monospace;" title="Inference Latency">--ms</span>
+        </div>
+
+        <!-- Right Controls: Shortcuts, Settings, Tutorial, Fullscreen -->
+        <div class="hud-section">
+          <!-- Active Transform Mode Badge (G Move, R Rotate, S Scale) -->
+          <span id="hud-transform-mode" class="holo-badge badge-green" style="display: none;">MODE: MOVE</span>
+
+          <button id="btn-toggle-camera" class="holo-button" title="Toggle Webcam Feed Visibility" style="padding: 6px 10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            </svg>
+          </button>
+          <button id="btn-shortcuts" class="holo-button" title="Keyboard Shortcuts Guide (?)" style="padding: 6px 10px; font-weight: 700;">
+            ?
+          </button>
+          <button id="btn-tutorial" class="holo-button" title="Gesture Guide & Tutorial" style="padding: 6px 10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
+          <button id="btn-settings" class="holo-button" title="Camera, Tracking & Graphics Settings" style="padding: 6px 10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+          <button id="btn-fullscreen" class="holo-button" title="Toggle Fullscreen (F)" style="padding: 6px 10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Left Tool Palette: Object & Tool Library -->
+      <aside class="hud-toolbar glass-panel">
+        <!-- 2D Tools -->
+        <button id="tool-freehand" class="holo-button tool-btn active" title="Freehand Brush (Index Raised to Draw)">
+          <svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+        </button>
+        <button id="tool-line" class="holo-button tool-btn" title="Straight Line Tool">
+          <svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+        </button>
+        <button id="tool-rect" class="holo-button tool-btn" title="Rectangle Tool">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+        </button>
+        <button id="tool-circle" class="holo-button tool-btn" title="Circle Tool">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>
+        </button>
+        <button id="tool-triangle" class="holo-button tool-btn" title="Triangle Tool">
+          <svg viewBox="0 0 24 24"><polygon points="12 3 22 21 2 21"/></svg>
+        </button>
+        <button id="tool-eraser" class="holo-button tool-btn" title="Eraser Tool">
+          <svg viewBox="0 0 24 24"><path d="M20 20H7L3 16C2 15 2 13 3 12L13 2C14 1 16 1 17 2L21 6C22 7 22 9 21 10L14 17"/><path d="M18 8l-6 6"/></svg>
+        </button>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 3D Tools -->
+        <button id="tool-select-3d" class="holo-button tool-btn" title="3D Select & Move (Pinch to Grab, Two-Hand Scale/Rotate)">
+          <svg viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+        </button>
+        <button id="tool-draw-3d" class="holo-button tool-btn" title="3D Spatial Tube Drawing">
+          <svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        </button>
+        <button id="tool-cube" class="holo-button tool-btn" title="Create Cube [1]">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+        </button>
+        <button id="tool-sphere" class="holo-button tool-btn" title="Create Sphere [2]">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16"/><path d="M4 12a8 8 0 0 0 16 0"/></svg>
+        </button>
+        <button id="tool-cylinder" class="holo-button tool-btn" title="Create Cylinder [3]">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/></svg>
+        </button>
+        <button id="tool-cone" class="holo-button tool-btn" title="Create Cone [4]">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 20 20 4 20"/><ellipse cx="12" cy="20" rx="8" ry="2"/></svg>
+        </button>
+        <button id="tool-pyramid" class="holo-button tool-btn" title="Create Pyramid [5]">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 2 20 22 20"/><line x1="12" y1="2" x2="12" y2="20"/></svg>
+        </button>
+        <button id="tool-torus" class="holo-button tool-btn" title="Create Torus [6]">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="6"/><ellipse cx="12" cy="12" rx="4" ry="2"/></svg>
+        </button>
+        <button id="tool-plane" class="holo-button tool-btn" title="Create Plane [7]">
+          <svg viewBox="0 0 24 24"><polygon points="2 6 22 6 18 18 6 18"/></svg>
+        </button>
+      </aside>
+
+      <!-- Right Inspector / Properties Panel -->
+      <aside class="hud-inspector glass-panel">
+        <div class="inspector-section-title">
+          <span>Holographic Color [C]</span>
+          <span id="current-hex-label" style="font-family: monospace; color: #00f5ff;">#00F5FF</span>
+        </div>
+
+        <div class="color-swatches">
+          <div class="color-swatch active" data-color="#00f5ff" style="background: #00f5ff; box-shadow: 0 0 8px #00f5ff;"></div>
+          <div class="color-swatch" data-color="#a855f7" style="background: #a855f7; box-shadow: 0 0 8px #a855f7;"></div>
+          <div class="color-swatch" data-color="#ff0077" style="background: #ff0077; box-shadow: 0 0 8px #ff0077;"></div>
+          <div class="color-swatch" data-color="#00ff88" style="background: #00ff88; box-shadow: 0 0 8px #00ff88;"></div>
+          <div class="color-swatch" data-color="#38bdf8" style="background: #38bdf8; box-shadow: 0 0 8px #38bdf8;"></div>
+          <div class="color-swatch" data-color="#f59e0b" style="background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></div>
+          <div class="color-swatch" data-color="#ffffff" style="background: #ffffff; box-shadow: 0 0 8px #ffffff;"></div>
+          <input type="color" id="custom-color-picker" value="#00f5ff" style="width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; background: transparent;">
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 2D Properties & Multiple Brush Styles -->
+        <div id="inspector-2d-section" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="inspector-section-title">
+            <span>2D Brush Style</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <button id="brush-style-neon" class="holo-button active" style="font-size: 0.72rem; padding: 4px 6px;">Neon Glow</button>
+            <button id="brush-style-solid" class="holo-button" style="font-size: 0.72rem; padding: 4px 6px;">Solid Pen</button>
+            <button id="brush-style-dotted" class="holo-button" style="font-size: 0.72rem; padding: 4px 6px;">Dotted Laser</button>
+            <button id="brush-style-calligraphy" class="holo-button" style="font-size: 0.72rem; padding: 4px 6px;">Calligraphy</button>
+          </div>
+
+          <div class="holo-slider-container">
+            <div class="holo-slider-header">
+              <span>Brush Width</span>
+              <span id="brush-size-val" class="holo-slider-val">6px</span>
+            </div>
+            <input type="range" id="brush-size-slider" class="holo-range" min="1" max="50" value="6">
+          </div>
+
+          <div class="holo-slider-container">
+            <div class="holo-slider-header">
+              <span>Eraser Radius</span>
+              <span id="eraser-size-val" class="holo-slider-val">24px</span>
+            </div>
+            <input type="range" id="eraser-size-slider" class="holo-range" min="5" max="100" value="24">
+          </div>
+        </div>
+
+        <!-- 3D Object Properties Panel -->
+        <div id="inspector-3d-section" style="display: none; flex-direction: column; gap: 12px;">
+          <div class="inspector-section-title">
+            <span>3D Object Inspector</span>
+            <span id="selected-object-type" class="holo-badge badge-purple">NONE</span>
+          </div>
+
+          <!-- Object Name -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">Object Name</label>
+            <input type="text" id="prop-obj-name" class="holo-input" value="None Selected" placeholder="Object Name">
+          </div>
+
+          <!-- Material Type Dropdown -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">Material Shader</label>
+            <select id="prop-material-select" class="holo-select">
+              <option value="glass">Holographic Glass</option>
+              <option value="wireframe">Neon Wireframe</option>
+              <option value="chrome">Metallic Chrome</option>
+              <option value="plasma">Plasma Emissive</option>
+            </select>
+          </div>
+
+          <!-- Position X, Y, Z -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">Position (X, Y, Z)</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+              <input type="number" id="prop-pos-x" class="holo-input" step="0.1" placeholder="X">
+              <input type="number" id="prop-pos-y" class="holo-input" step="0.1" placeholder="Y">
+              <input type="number" id="prop-pos-z" class="holo-input" step="0.1" placeholder="Z">
+            </div>
+          </div>
+
+          <!-- Rotation X, Y, Z (degrees) -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">Rotation (°)</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+              <input type="number" id="prop-rot-x" class="holo-input" step="5" placeholder="Rx">
+              <input type="number" id="prop-rot-y" class="holo-input" step="5" placeholder="Ry">
+              <input type="number" id="prop-rot-z" class="holo-input" step="5" placeholder="Rz">
+            </div>
+          </div>
+
+          <!-- Scale X, Y, Z -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">Scale</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+              <input type="number" id="prop-scale-x" class="holo-input" step="0.1" min="0.2" max="5" placeholder="Sx">
+              <input type="number" id="prop-scale-y" class="holo-input" step="0.1" min="0.2" max="5" placeholder="Sy">
+              <input type="number" id="prop-scale-z" class="holo-input" step="0.1" min="0.2" max="5" placeholder="Sz">
+            </div>
+          </div>
+
+          <!-- Toggles: Wireframe & Visibility -->
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem;">
+            <label for="toggle-wireframe" style="color: var(--text-muted); cursor: pointer;">Holo Wireframe [W]</label>
+            <input type="checkbox" id="toggle-wireframe" style="cursor: pointer; accent-color: #00f5ff;">
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="display: flex; gap: 6px; margin-top: 4px;">
+            <button id="btn-toggle-visibility" class="holo-button" style="flex: 1; font-size: 0.72rem;" title="Hide/Show Object (H)">Hide [H]</button>
+            <button id="btn-reset-transform" class="holo-button" style="flex: 1; font-size: 0.72rem;" title="Reset Pos, Rot, Scale (0)">Reset [0]</button>
+          </div>
+
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-duplicate-3d" class="holo-button" style="flex: 1; font-size: 0.72rem;" title="Duplicate Object (Ctrl+D)">Duplicate</button>
+            <button id="btn-delete-3d" class="holo-button danger" style="flex: 1; font-size: 0.72rem;" title="Delete Object (Delete)">Delete</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Bottom Action Bar -->
+      <footer class="hud-bottom-bar glass-panel">
+        <button id="btn-undo" class="holo-button" title="Undo (Ctrl+Z)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+          <span>Undo</span>
+        </button>
+        <button id="btn-redo" class="holo-button" title="Redo (Ctrl+Y)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+          <span>Redo</span>
+        </button>
+        <button id="btn-clear" class="holo-button danger" title="Clear Canvas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Clear</span>
+        </button>
+
+        <div style="width: 1px; height: 24px; background: rgba(0, 245, 255, 0.2); margin: 0 4px;"></div>
+
+        <button id="btn-save-project" class="holo-button" title="Save Project (Ctrl+S)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <span>Save [Ctrl+S]</span>
+        </button>
+        <label for="input-load-project" class="holo-button" title="Open Project (Ctrl+O)" style="cursor: pointer; margin: 0;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Open [Ctrl+O]</span>
+          <input type="file" id="input-load-project" accept=".holodraw,.json" style="display: none;">
+        </label>
+
+        <div style="width: 1px; height: 24px; background: rgba(0, 245, 255, 0.2); margin: 0 4px;"></div>
+
+        <button id="btn-export-png" class="holo-button" title="Export 2D Drawing as PNG">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span>Export PNG</span>
+        </button>
+        <button id="btn-export-glb" class="holo-button" title="Export 3D Scene as GLB">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span>Export GLB</span>
+        </button>
+      </footer>
+
+      <!-- 3D Holographic Trash Zone HUD Indicator -->
+      <div id="hud-trash-zone" class="trash-zone-hud">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        <span>TRASH ZONE</span>
+      </div>
+
+      <!-- Toast Alerts Container -->
+      <div id="hud-toasts" class="hud-toasts"></div>
+    </div>
+
+    <!-- Modal: Interactive Tutorial & Gesture Guide -->
+    <div id="tutorial-modal" class="holo-modal-backdrop">
+      <div class="holo-modal-dialog glass-panel">
+        <div class="modal-header">
+          <div class="modal-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+            <span>HOLODraw 3D — Natural Gesture Manual</span>
+          </div>
+          <button id="tutorial-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+          Control your studio naturally using laptop webcam hand gestures, with seamless mouse & keyboard fallback.
+        </p>
+
+        <div class="tutorial-grid">
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">☝️ Index Finger Raised</span>
+              <span class="holo-badge badge-green">DRAW</span>
+            </div>
+            <p class="gesture-desc">Raise index finger. Freehand paints in 2D or generates continuous 3D spatial volumetric tubes.</p>
+          </div>
+
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">🤏 Thumb + Index Pinch</span>
+              <span class="holo-badge badge-red">SELECT & MOVE</span>
+            </div>
+            <p class="gesture-desc">Hover over an object (turns gold) and pinch to grab! Move your hand across X/Y space, or push/pull depth.</p>
+          </div>
+
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">👐 Two-Hand Dual Pinch</span>
+              <span class="holo-badge badge-purple">SCALE & ROTATE</span>
+            </div>
+            <p class="gesture-desc">Pinch with both hands. Expanding hands scales object (0.25 to 4.5); tilting hands rotates smoothly.</p>
+          </div>
+
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">✋ Open Palm</span>
+              <span class="holo-badge badge-cyan">PAUSE & HOVER</span>
+            </div>
+            <p class="gesture-desc">Open all fingers to safely hover across the workspace without accidental painting or dragging.</p>
+          </div>
+
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">✊ Closed Fist</span>
+              <span class="holo-badge" style="background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid #eab308;">CANCEL / DESELECT</span>
+            </div>
+            <p class="gesture-desc">Clench fist to cancel active stroke or deselect currently active object.</p>
+          </div>
+
+          <div class="gesture-card">
+            <div class="gesture-card-header">
+              <span class="gesture-name">🗑️ Trash Zone Release</span>
+              <span class="holo-badge badge-red">DELETE & UNDO</span>
+            </div>
+            <p class="gesture-desc">Drag object over bottom-right portal. Turns glowing red. Release pinch to delete. Press Ctrl+Z to undo!</p>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <button id="tutorial-got-it-btn" class="holo-button active" style="padding: 8px 20px;">Got It — Launch Studio</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Keyboard Shortcuts Guide (?) -->
+    <div id="shortcuts-modal" class="holo-modal-backdrop">
+      <div class="holo-modal-dialog glass-panel" style="max-width: 640px;">
+        <div class="modal-header">
+          <div class="modal-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+              <line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/>
+              <line x1="6" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/>
+            </svg>
+            <span>Keyboard Shortcuts Manual</span>
+          </div>
+          <button id="shortcuts-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; font-size: 0.85rem;">
+          <!-- General -->
+          <div>
+            <div class="inspector-section-title" style="margin-bottom: 6px;"><span>General Navigation</span></div>
+            <div class="shortcuts-grid">
+              <div><kbd>Ctrl+Z</kbd> Undo action</div>
+              <div><kbd>Ctrl+Y</kbd> Redo action</div>
+              <div><kbd>Ctrl+S</kbd> Save project</div>
+              <div><kbd>Ctrl+O</kbd> Open project</div>
+              <div><kbd>Ctrl+D</kbd> Duplicate object</div>
+              <div><kbd>Del / Backspace</kbd> Delete object</div>
+              <div><kbd>Esc</kbd> Deselect or cancel</div>
+              <div><kbd>F</kbd> Toggle Fullscreen</div>
+              <div><kbd>Tab</kbd> Switch 2D/3D Mode</div>
+              <div><kbd>Space</kbd> Pause / resume</div>
+            </div>
+          </div>
+
+          <!-- Object Creation -->
+          <div>
+            <div class="inspector-section-title" style="margin-bottom: 6px;"><span>Object Creation</span></div>
+            <div class="shortcuts-grid">
+              <div><kbd>1</kbd> Create Cube</div>
+              <div><kbd>2</kbd> Create Sphere</div>
+              <div><kbd>3</kbd> Create Cylinder</div>
+              <div><kbd>4</kbd> Create Cone</div>
+              <div><kbd>5</kbd> Create Pyramid</div>
+              <div><kbd>6</kbd> Create Torus</div>
+              <div><kbd>7</kbd> Create Plane</div>
+            </div>
+          </div>
+
+          <!-- Transformations -->
+          <div>
+            <div class="inspector-section-title" style="margin-bottom: 6px;"><span>Transformations</span></div>
+            <div class="shortcuts-grid">
+              <div><kbd>G</kbd> Move Mode</div>
+              <div><kbd>R</kbd> Rotate Mode</div>
+              <div><kbd>S</kbd> Scale Mode</div>
+              <div><kbd>X</kbd> Constrain to X-Axis</div>
+              <div><kbd>Y</kbd> Constrain to Y-Axis</div>
+              <div><kbd>Z</kbd> Constrain to Z-Axis</div>
+              <div><kbd>0</kbd> Reset Transform</div>
+            </div>
+          </div>
+
+          <!-- Additional -->
+          <div>
+            <div class="inspector-section-title" style="margin-bottom: 6px;"><span>Selection & Display</span></div>
+            <div class="shortcuts-grid">
+              <div><kbd>Ctrl+A</kbd> Select All</div>
+              <div><kbd>Ctrl+Shift+A</kbd> Deselect All</div>
+              <div><kbd>H</kbd> Hide/Show Object</div>
+              <div><kbd>C</kbd> Cycle Color</div>
+              <div><kbd>W</kbd> Toggle Wireframe</div>
+              <div><kbd>?</kbd> Open this guide</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Settings & System Calibration -->
+    <div id="settings-modal" class="holo-modal-backdrop">
+      <div class="holo-modal-dialog glass-panel" style="max-width: 560px;">
+        <div class="modal-header">
+          <div class="modal-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Tracking & Studio Settings</span>
+          </div>
+          <button id="settings-close-btn" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Camera Selection & Resolution -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Webcam Device</label>
+              <select id="setting-camera-select" class="holo-select">
+                <option value="">Default Webcam</option>
+              </select>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Camera Resolution</label>
+              <select id="setting-camera-resolution" class="holo-select">
+                <option value="1280x720" selected>1280 x 720 (HD Recommended)</option>
+                <option value="640x480">640 x 480 (Low Latency)</option>
+                <option value="1920x1080">1920 x 1080 (Full HD)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tracking Confidence Slider -->
+          <div class="holo-slider-container">
+            <div class="holo-slider-header">
+              <span>Detection & Tracking Confidence</span>
+              <span id="setting-conf-val" class="holo-slider-val">50%</span>
+            </div>
+            <input type="range" id="setting-tracking-confidence" class="holo-range" min="0.3" max="0.9" step="0.05" value="0.5">
+          </div>
+
+          <!-- Pinch Sensitivity -->
+          <div class="holo-slider-container">
+            <div class="holo-slider-header">
+              <span>Pinch Sensitivity Threshold</span>
+              <span id="setting-pinch-val" class="holo-slider-val">0.28</span>
+            </div>
+            <input type="range" id="setting-pinch-threshold" class="holo-range" min="0.15" max="0.45" step="0.01" value="0.28">
+          </div>
+
+          <!-- Landmark Smoothing Filter (One Euro Cutoff) -->
+          <div class="holo-slider-container">
+            <div class="holo-slider-header">
+              <span>Landmark Smoothing / Responsiveness</span>
+              <span id="setting-smooth-val" class="holo-slider-val">1.2</span>
+            </div>
+            <input type="range" id="setting-landmark-smoothing" class="holo-range" min="0.5" max="3.0" step="0.1" value="1.2">
+          </div>
+
+          <!-- Camera Brightness & Contrast -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="holo-slider-container">
+              <div class="holo-slider-header">
+                <span>Brightness</span>
+                <span id="setting-bright-val" class="holo-slider-val">100%</span>
+              </div>
+              <input type="range" id="setting-camera-brightness" class="holo-range" min="0.5" max="2.0" step="0.05" value="1.0">
+            </div>
+            <div class="holo-slider-container">
+              <div class="holo-slider-header">
+                <span>Contrast</span>
+                <span id="setting-contrast-val" class="holo-slider-val">100%</span>
+              </div>
+              <input type="range" id="setting-camera-contrast" class="holo-range" min="0.5" max="2.0" step="0.05" value="1.0">
+            </div>
+          </div>
+
+          <!-- Graphics Quality -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Graphics Rendering Quality</label>
+            <select id="setting-graphics-quality" class="holo-select">
+              <option value="high" selected>High Quality (Antialiasing, High-DPI, 180 Particles)</option>
+              <option value="medium">Medium (Standard DPR, 90 Particles)</option>
+              <option value="low">Low (Performance Boost, Reduced DPR)</option>
+            </select>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Toggles -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.8rem;">
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <span>Render Hand Skeletons</span>
+              <input type="checkbox" id="setting-show-skeleton" checked style="accent-color: #00f5ff; cursor: pointer;">
+            </label>
+
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <span>Sound Feedback SFX</span>
+              <input type="checkbox" id="setting-sound-sfx" checked style="accent-color: #00f5ff; cursor: pointer;">
+            </label>
+
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <span>Holographic Grid Floor</span>
+              <input type="checkbox" id="setting-show-grid" checked style="accent-color: #00f5ff; cursor: pointer;">
+            </label>
+
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <span>Coordinate Axes [XYZ]</span>
+              <input type="checkbox" id="setting-show-axes" style="accent-color: #00f5ff; cursor: pointer;">
+            </label>
+
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <span>Scanline Overlay</span>
+              <input type="checkbox" id="setting-show-scanlines" checked style="accent-color: #00f5ff; cursor: pointer;">
+            </label>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+            <button id="btn-open-shortcuts-ref" class="holo-button" style="font-size: 0.75rem;">View Keyboard Shortcuts</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
